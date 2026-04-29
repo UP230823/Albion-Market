@@ -23,8 +23,8 @@ def get_material_prices():
 m_prices = get_material_prices()
 
 st.sidebar.header("🎯 Panel de Control")
-categoria_sel = st.sidebar.selectbox("Seleccionar Árbol/Equipo", list(items_db.CATEGORIAS.keys()))
-tiers_visibles = st.sidebar.multiselect("Tiers:", [4, 5, 6, 7, 8], default=[4, 5, 6])
+categoria_sel = st.sidebar.selectbox("Seleccionar Árbol/Equipo (Búsqueda Normal)", list(items_db.CATEGORIAS.keys()))
+tiers_visibles = st.sidebar.multiselect("Tiers:", [4, 5, 6, 7, 8], default=[4, 5, 6, 7, 8])
 
 calidades_sel = st.sidebar.multiselect(
     "Calidades de Compra Base:",
@@ -33,9 +33,9 @@ calidades_sel = st.sidebar.multiselect(
     format_func=lambda x: {1:"Normal", 2:"Buena", 3:"Notable", 4:"Sobresaliente", 5:"Obra Maestra"}[x]
 )
 
-st.title(f"🏹 Escaneo BM + Caerleon: {categoria_sel}")
+st.title("🏹 Albion Master Hunter")
 
-# --- INPUTS CORREGIDOS ---
+# --- INPUTS DE PRECIOS DE MATERIALES ---
 tabs = st.tabs(["T4", "T5", "T6", "T7", "T8"])
 precios_mat = {}
 
@@ -57,21 +57,28 @@ for i, t in enumerate([4, 5, 6, 7, 8]):
             c3.number_input(f"Reliquia T{t}", min_value=0, value=int(val_re), step=1, key=f"reli_t{t}_fix")
         ]
 
-if st.button("🚀 INICIAR BÚSQUEDA AVANZADA"):
-    items_info = items_db.CATEGORIAS[categoria_sel]
-    ids_api = []
-    
-    # Pedimos TODAS las calidades a la API para poder hacer la "cascada"
-    for t in tiers_visibles:
-        for key in items_info.keys():
-            base = f"T{t}_{key}"
-            ids_api.extend([base, f"{base}@1", f"{base}@2", f"{base}@3"])
-    
-    # --- AQUÍ EMPIEZA EL FIX DE ESCALABILIDAD (CHUNKING) ---
+st.markdown("---")
+col1, col2 = st.columns(2)
+
+# =====================================================================
+# BOTÓN 1: BÚSQUEDA NORMAL (Solo la categoría seleccionada)
+# =====================================================================
+with col1:
+    btn_normal = st.button("🚀 BÚSQUEDA POR CATEGORÍA")
+
+# =====================================================================
+# BOTÓN 2: ESCANEO MASIVO (> 300k Profit)
+# =====================================================================
+with col2:
+    btn_masivo = st.button("🔥 ESCANEAR TODO EL MERCADO (> 300k)")
+
+# Función central de procesamiento para no repetir código
+def procesar_busqueda(ids_api, info_diccionarios, umbral_profit=1000):
     datos = []
-    chunk_size = 100 # Límite seguro para no saturar la URL de Albion
+    chunk_size = 100 
     
-    with st.spinner('Descargando y analizando lotes del mercado...'):
+    with st.spinner(f'Analizando lotes del mercado (0 / {len(ids_api)} items)...'):
+        progress_bar = st.progress(0)
         for i in range(0, len(ids_api), chunk_size):
             chunk = ids_api[i:i + chunk_size]
             url = f"https://www.albion-online-data.com/api/v2/stats/prices/{','.join(chunk)}?locations=Caerleon,BlackMarket"
@@ -79,14 +86,17 @@ if st.button("🚀 INICIAR BÚSQUEDA AVANZADA"):
             try:
                 res = requests.get(url, timeout=10)
                 if res.status_code == 200:
-                    datos.extend(res.json()) # Unimos las respuestas de todos los lotes
+                    datos.extend(res.json())
                 else:
                     st.error(f"Error de la API: Código {res.status_code}")
             except Exception as e:
                 st.error(f"Hubo un problema de conexión: {e}")
-    # --- AQUÍ TERMINA EL FIX ---
+            
+            # Actualizar barra de progreso
+            progreso = min(1.0, (i + chunk_size) / len(ids_api))
+            progress_bar.progress(progreso)
 
-    # El resto sigue exactamente igual
+    # Mapeo: [item_id][calidad][ciudad]
     db = {}
     for e in datos:
         item, q, city = e['item_id'], e['quality'], e['city']
@@ -102,85 +112,115 @@ if st.button("🚀 INICIAR BÚSQUEDA AVANZADA"):
     ahora = datetime.utcnow()
     q_nombres = {1:"Normal", 2:"Buena", 3:"Notable", 4:"Sobresaliente", 5:"Obra Maestra"}
 
-    for t in tiers_visibles:
-        p_r, p_s, p_re = precios_mat[t]
-        for key, nombre_es in items_info.items():
-            base_id = f"T{t}_{key}"
+    with st.spinner('Calculando cascada de ineficiencias...'):
+        for t in tiers_visibles:
+            p_r, p_s, p_re = precios_mat[t]
             
-            if "MAIN" in key: cant = 288
-            elif "2H" in key: cant = 384
-            elif any(x in key for x in ["ARMOR", "BAG"]): cant = 192
-            else: cant = 96 
+            # info_diccionarios es un diccionario maestro de {key: nombre}
+            for key, nombre_es in info_diccionarios.items():
+                base_id = f"T{t}_{key}"
+                
+                if "MAIN" in key: cant = 288
+                elif "2H" in key: cant = 384
+                elif any(x in key for x in ["ARMOR", "BAG"]): cant = 192
+                else: cant = 96 
 
-            # q_compra es la calidad de la base que compramos en Caerleon
-            for q_compra in calidades_sel:
-                p_base_q = db.get(base_id, {}).get(q_compra, {}).get('Caerleon', {}).get('venta_min', 0)
-                if p_base_q == 0: continue
+                for q_compra in calidades_sel:
+                    p_base_q = db.get(base_id, {}).get(q_compra, {}).get('Caerleon', {}).get('venta_min', 0)
+                    if p_base_q == 0: continue
 
-                for e in [0, 1, 2, 3]:
-                    target_id = base_id if e == 0 else f"{base_id}@{e}"
-                    
-                    p_venta_final = 0
-                    lugar_venta = ""
-                    f_str = ""
-                    q_vendida_como = q_compra
-
-                    # BÚSQUEDA EN CASCADA
-                    for q_venta in range(1, q_compra + 1):
-                        info_bm = db.get(target_id, {}).get(q_venta, {}).get('Black Market', {})
-                        info_cae = db.get(target_id, {}).get(q_venta, {}).get('Caerleon', {})
+                    for e in [0, 1, 2, 3]:
+                        target_id = base_id if e == 0 else f"{base_id}@{e}"
                         
-                        p_bm = info_bm.get('compra_max', 0)
-                        p_cae = info_cae.get('compra_max', 0)
-                        
-                        if p_bm > p_venta_final:
-                            p_venta_final = p_bm
-                            lugar_venta = "Black Market"
-                            f_str = info_bm.get('fecha')
-                            q_vendida_como = q_venta
+                        p_venta_final = 0
+                        lugar_venta = ""
+                        f_str = ""
+                        q_vendida_como = q_compra
+
+                        # BÚSQUEDA EN CASCADA
+                        for q_venta in range(1, q_compra + 1):
+                            info_bm = db.get(target_id, {}).get(q_venta, {}).get('Black Market', {})
+                            info_cae = db.get(target_id, {}).get(q_venta, {}).get('Caerleon', {})
                             
-                        if p_cae > p_venta_final:
-                            p_venta_final = p_cae
-                            lugar_venta = "Caerleon"
-                            f_str = info_cae.get('fecha')
-                            q_vendida_como = q_venta
-
-                    if p_venta_final == 0: continue
-
-                    costo_mat = 0
-                    if e >= 1: costo_mat += (p_r * cant)
-                    if e >= 2: costo_mat += (p_s * cant)
-                    if e == 3: costo_mat += (p_re * cant)
-                    
-                    costo_total = p_base_q + costo_mat
-                    profit = (p_venta_final * 0.92) - costo_total # Tax 8%
-                    
-                    if profit > 1000:
-                        try:
-                            dt = datetime.strptime(f_str, '%Y-%m-%dT%H:%M:%S')
-                            min_diff = int((ahora - dt).total_seconds() / 60)
-                            if min_diff < 1440:
+                            p_bm = info_bm.get('compra_max', 0)
+                            p_cae = info_cae.get('compra_max', 0)
+                            
+                            if p_bm > p_venta_final:
+                                p_venta_final = p_bm
+                                lugar_venta = "Black Market"
+                                f_str = info_bm.get('fecha')
+                                q_vendida_como = q_venta
                                 
-                                # Visualización del truco
-                                si_hubo_truco = q_nombres[q_compra] if q_compra == q_vendida_como else f"{q_nombres[q_compra]} ➔ {q_nombres[q_vendida_como]}"
+                            if p_cae > p_venta_final:
+                                p_venta_final = p_cae
+                                lugar_venta = "Caerleon"
+                                f_str = info_cae.get('fecha')
+                                q_vendida_como = q_venta
 
-                                resultados.append({
-                                    "Objeto": f"{nombre_es}",
-                                    "Tier": f"{t}.{e}",
-                                    "Calidad": si_hubo_truco,
-                                    "Vender en": lugar_venta,
-                                    "Profit Neto": int(profit),
-                                    "ROI %": round((profit / costo_total) * 100, 1),
-                                    "Costo Total": int(costo_total),
-                                    "BM Paga": int(p_venta_final),
-                                    "Dato": f"{min_diff}m"
-                                })
-                        except: continue
+                        if p_venta_final == 0: continue
+
+                        costo_mat = 0
+                        if e >= 1: costo_mat += (p_r * cant)
+                        if e >= 2: costo_mat += (p_s * cant)
+                        if e == 3: costo_mat += (p_re * cant)
+                        
+                        costo_total = p_base_q + costo_mat
+                        profit = (p_venta_final * 0.92) - costo_total # Tax 8%
+                        
+                        # APLICAR EL UMBRAL DE PROFIT (1k normal, 300k masivo)
+                        if profit >= umbral_profit:
+                            try:
+                                dt = datetime.strptime(f_str, '%Y-%m-%dT%H:%M:%S')
+                                min_diff = int((ahora - dt).total_seconds() / 60)
+                                if min_diff < 1440:
+                                    
+                                    si_hubo_truco = q_nombres[q_compra] if q_compra == q_vendida_como else f"{q_nombres[q_compra]} ➔ {q_nombres[q_vendida_como]}"
+
+                                    resultados.append({
+                                        "Objeto": f"{nombre_es}",
+                                        "Tier": f"{t}.{e}",
+                                        "Calidad": si_hubo_truco,
+                                        "Vender en": lugar_venta,
+                                        "Profit Neto": int(profit),
+                                        "ROI %": round((profit / costo_total) * 100, 1),
+                                        "Costo Total": int(costo_total),
+                                        "BM Paga": int(p_venta_final),
+                                        "Dato": f"{min_diff}m"
+                                    })
+                            except: continue
 
     if resultados:
-        # Eliminamos duplicados por si 2 bases cumplen la misma orden pero una es más barata
         df = pd.DataFrame(resultados).sort_values(by="Profit Neto", ascending=False)
         df = df.drop_duplicates(subset=['Objeto', 'Tier', 'Vender en', 'BM Paga'])
+        st.success(f"¡Se encontraron {len(df)} oportunidades rentables!")
         st.dataframe(df, use_container_width=True)
     else:
-        st.warning("No hay profit tras el análisis. ¡Haz un barrido de mercado en el juego!")
+        st.warning(f"No hay profit superior a {umbral_profit} silver. ¡Actualiza el mercado!")
+
+
+# --- EJECUCIÓN DEL BOTÓN NORMAL ---
+if btn_normal:
+    items_info = items_db.CATEGORIAS[categoria_sel]
+    ids_api = []
+    for t in tiers_visibles:
+        for key in items_info.keys():
+            base = f"T{t}_{key}"
+            ids_api.extend([base, f"{base}@1", f"{base}@2", f"{base}@3"])
+    
+    procesar_busqueda(ids_api, items_info, umbral_profit=1000)
+
+# --- EJECUCIÓN DEL BOTÓN MASIVO (> 300k) ---
+if btn_masivo:
+    # Juntar todas las categorías en un solo súper-diccionario
+    diccionario_maestro = {}
+    for cat in items_db.CATEGORIAS.values():
+        diccionario_maestro.update(cat)
+    
+    ids_api_masivo = []
+    for t in tiers_visibles:
+        for key in diccionario_maestro.keys():
+            base = f"T{t}_{key}"
+            ids_api_masivo.extend([base, f"{base}@1", f"{base}@2", f"{base}@3"])
+    
+    # Llamar a la función central pidiendo solo los "Big Wins"
+    procesar_busqueda(ids_api_masivo, diccionario_maestro, umbral_profit=300000)
