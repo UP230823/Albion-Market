@@ -136,10 +136,19 @@ def procesar_busqueda(ids_api, info_diccionarios, umbral_profit=1000):
 
                         if p_venta_final == 0: continue
 
+                        # --- NUEVA LÓGICA DE TEXTO PARA LA RECETA ---
                         costo_mat = 0
-                        if e >= 1: costo_mat += (p_r * cant)
-                        if e >= 2: costo_mat += (p_s * cant)
-                        if e == 3: costo_mat += (p_re * cant)
+                        receta_texto = "Directo (Sin encantar)"
+                        
+                        if e == 1: 
+                            costo_mat += (p_r * cant)
+                            receta_texto = f"+ {cant} Runas"
+                        elif e == 2: 
+                            costo_mat += (p_r * cant) + (p_s * cant)
+                            receta_texto = f"+ {cant} Runas + {cant} Almas"
+                        elif e == 3: 
+                            costo_mat += (p_r * cant) + (p_s * cant) + (p_re * cant)
+                            receta_texto = f"+ {cant} Runas + {cant} Almas + {cant} Reliquias"
                         
                         costo_total = p_base_q + costo_mat
                         profit = (p_venta_final * 0.92) - costo_total 
@@ -156,6 +165,7 @@ def procesar_busqueda(ids_api, info_diccionarios, umbral_profit=1000):
                                         "Objeto": f"{nombre_es}",
                                         "Tier": f"{t}.{e}",
                                         "Calidad": si_hubo_truco,
+                                        "Receta": receta_texto,  # <--- COLUMNA NUEVA AQUÍ
                                         "Profit Neto": int(profit),
                                         "ROI %": round((profit / costo_total) * 100, 1),
                                         "Costo Total": int(costo_total),
