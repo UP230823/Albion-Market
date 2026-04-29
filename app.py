@@ -60,17 +60,33 @@ for i, t in enumerate([4, 5, 6, 7, 8]):
 if st.button("🚀 INICIAR BÚSQUEDA AVANZADA"):
     items_info = items_db.CATEGORIAS[categoria_sel]
     ids_api = []
+    
     # Pedimos TODAS las calidades a la API para poder hacer la "cascada"
     for t in tiers_visibles:
         for key in items_info.keys():
             base = f"T{t}_{key}"
             ids_api.extend([base, f"{base}@1", f"{base}@2", f"{base}@3"])
     
-    url = f"https://www.albion-online-data.com/api/v2/stats/prices/{','.join(ids_api)}?locations=Caerleon,BlackMarket"
+    # --- AQUÍ EMPIEZA EL FIX DE ESCALABILIDAD (CHUNKING) ---
+    datos = []
+    chunk_size = 100 # Límite seguro para no saturar la URL de Albion
     
-    with st.spinner('Analizando ineficiencias del mercado...'):
-        datos = requests.get(url).json()
+    with st.spinner('Descargando y analizando lotes del mercado...'):
+        for i in range(0, len(ids_api), chunk_size):
+            chunk = ids_api[i:i + chunk_size]
+            url = f"https://www.albion-online-data.com/api/v2/stats/prices/{','.join(chunk)}?locations=Caerleon,BlackMarket"
+            
+            try:
+                res = requests.get(url, timeout=10)
+                if res.status_code == 200:
+                    datos.extend(res.json()) # Unimos las respuestas de todos los lotes
+                else:
+                    st.error(f"Error de la API: Código {res.status_code}")
+            except Exception as e:
+                st.error(f"Hubo un problema de conexión: {e}")
+    # --- AQUÍ TERMINA EL FIX ---
 
+    # El resto sigue exactamente igual
     db = {}
     for e in datos:
         item, q, city = e['item_id'], e['quality'], e['city']
@@ -109,8 +125,7 @@ if st.button("🚀 INICIAR BÚSQUEDA AVANZADA"):
                     f_str = ""
                     q_vendida_como = q_compra
 
-                    # --- EL SECRETO DE JESUS: BÚSQUEDA EN CASCADA ---
-                    # Comparamos la calidad actual y TODAS las inferiores
+                    # BÚSQUEDA EN CASCADA
                     for q_venta in range(1, q_compra + 1):
                         info_bm = db.get(target_id, {}).get(q_venta, {}).get('Black Market', {})
                         info_cae = db.get(target_id, {}).get(q_venta, {}).get('Caerleon', {})
