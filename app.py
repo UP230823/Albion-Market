@@ -26,17 +26,17 @@ def_p = {4: [11, 89, 411], 5: [48, 278, 744], 6: [223, 1057, 2721], 7: [856, 258
 # ==========================================
 # MENÚ DE NAVEGACIÓN LATERAL
 # ==========================================
-st.sidebar.image("https://assets.albiononline.com/assets/images/logo.png", width=150) # Un toque visual
+st.sidebar.image("https://assets.albiononline.com/assets/images/logo.png", width=150)
 st.sidebar.header("🎯 Herramientas")
 menu = st.sidebar.radio("Selecciona un Módulo:", [
     "🏹 Flipper (Mercado)", 
-    "🔨 Crafting Scanner", 
+    "🔨 Crafting Scanner (.0 a .4)", 
     "✨ Arbitraje Fragmentos"
 ])
 st.sidebar.markdown("---")
 
 # ==========================================
-# MÓDULO 1: EL FLIPPER ORIGINAL (INTACTO)
+# MÓDULO 1: EL FLIPPER ORIGINAL
 # ==========================================
 if menu == "🏹 Flipper (Mercado)":
     
@@ -180,59 +180,93 @@ if menu == "🏹 Flipper (Mercado)":
         procesar_busqueda(ids_api_masivo, dic_maestro, umbral_profit=umbral)
 
 # ==========================================
-# MÓDULO 2: CRAFTING SCANNER
+# MÓDULO 2: CRAFTING SCANNER AVANZADO (.0 a .4)
 # ==========================================
-elif menu == "🔨 Crafting Scanner":
-    st.title("🔨 Crafting Scanner (Caerleon -> BM)")
-    st.write("Verifica si fabricar el objeto desde cero deja más ganancia que comprarlo hecho.")
+elif menu == "🔨 Crafting Scanner (.0 a .4)":
+    st.title("🔨 Crafting Scanner Avanzado")
+    st.write("Calcula si fabricar el objeto desde cero (incluyendo calidades altas como .4) deja ganancia.")
     
-    col1, col2 = st.columns(2)
-    tier_c = col1.selectbox("Tier Base a fabricar (Plano):", [4, 5, 6, 7, 8])
-    categoria_craft = col2.selectbox("Familia de Objetos:", list(items_db.CATEGORIAS.keys()))
+    col1, col2, col3 = st.columns(3)
+    tier_c = col1.selectbox("Tier Base a fabricar:", [4, 5, 6, 7, 8])
+    encantamiento_c = col2.selectbox("Encantamiento (.X):", [0, 1, 2, 3, 4], format_func=lambda x: f".{x}")
+    categoria_craft = col3.selectbox("Familia de Objetos:", list(items_db.CATEGORIAS.keys()))
     
-    st.info("💡 Ingresa el precio del material refinado principal (Cuero, Tela, Metal o Madera) que usa esta familia.")
-    col3, col4 = st.columns(2)
-    costo_mat = col3.number_input(f"Costo de 1 Material Refinado T{tier_c}:", value=150, step=10)
-    devolucion = col4.slider("% Devolución de Recursos (Caerleon Base = 15.2%)", 0.0, 50.0, 15.2)
+    # Diccionario maestro para llamar a la API correctamente
+    MAT_MAP = {
+        "Madera": {"raw": "WOOD", "ref": "PLANKS"},
+        "Cuero": {"raw": "HIDE", "ref": "LEATHER"},
+        "Tela": {"raw": "FIBER", "ref": "CLOTH"},
+        "Metal": {"raw": "ORE", "ref": "METALBAR"}
+    }
     
-    if st.button("🛠️ Analizar Rentabilidad de Crafteo"):
+    st.info("💡 Selecciona el material principal de esta familia. El sistema buscará su precio automáticamente en Caerleon.")
+    col4, col5 = st.columns(2)
+    tipo_mat = col4.selectbox("Material Principal Usado:", list(MAT_MAP.keys()))
+    devolucion = col5.slider("% Devolución de Recursos al Craftear", 0.0, 50.0, 15.2)
+    
+    if st.button("🛠️ Escanear Rentabilidad de Crafteo"):
         items_info = items_db.CATEGORIAS[categoria_craft]
-        ids_api = [f"T{tier_c}_{key}" for key in items_info.keys()]
         
-        with st.spinner('Revisando el Black Market...'):
-            url = f"https://www.albion-online-data.com/api/v2/stats/prices/{','.join(ids_api)}?locations=BlackMarket"
+        # Generar sufijo para la API (@1, @2, @3, @4)
+        suffix = f"@{encantamiento_c}" if encantamiento_c > 0 else ""
+        
+        ids_items = [f"T{tier_c}_{key}{suffix}" for key in items_info.keys()]
+        id_ref = f"T{tier_c}_{MAT_MAP[tipo_mat]['ref']}{suffix}"
+        id_raw = f"T{tier_c}_{MAT_MAP[tipo_mat]['raw']}{suffix}"
+        
+        with st.spinner(f'Buscando precios de {tipo_mat} y analizando Black Market...'):
+            url_mats = f"https://www.albion-online-data.com/api/v2/stats/prices/{id_ref},{id_raw}?locations=Caerleon"
+            url_items = f"https://www.albion-online-data.com/api/v2/stats/prices/{','.join(ids_items)}?locations=BlackMarket"
+            
             try:
-                datos = requests.get(url, timeout=10).json()
+                res_mats = requests.get(url_mats, timeout=10).json()
+                res_items = requests.get(url_items, timeout=10).json()
+                
+                # Extraemos el precio del material refinado y crudo
+                precio_refinado = next((e['sell_price_min'] for e in res_mats if e['item_id'] == id_ref and e['sell_price_min'] > 0), 0)
+                precio_raw = next((e['sell_price_min'] for e in res_mats if e['item_id'] == id_raw and e['sell_price_min'] > 0), 0)
+                
+                if precio_refinado == 0:
+                    st.warning(f"Nadie está vendiendo {tipo_mat} refinado T{tier_c}.{encantamiento_c} en Caerleon en este momento.")
+                
                 resultados_craft = []
                 ahora = datetime.utcnow()
                 
-                for e in datos:
+                for e in res_items:
                     p_bm = e['buy_price_max']
                     if p_bm == 0: continue
                     
-                    item_id = e['item_id']
-                    key_base = item_id.split('_', 1)[1] if '_' in item_id else item_id
-                    nombre = items_info.get(key_base, item_id)
+                    item_id_puro = e['item_id'].split('@')[0]
+                    key_base = item_id_puro.split('_', 1)[1] if '_' in item_id_puro else item_id_puro
+                    nombre = items_info.get(key_base, item_id_puro)
+                    nombre_completo = f"{nombre} .{encantamiento_c}" if encantamiento_c > 0 else nombre
                     
-                    # Identificar cuántos materiales usa según la familia
+                    # Lógica aproximada de materiales por tipo
                     if "MAIN" in key_base: mats = 16
-                    elif "2H" in key_base: mats = 24 # Varía un poco (20 a 32), usamos promedio 24
+                    elif "2H" in key_base: mats = 24 
                     elif any(x in key_base for x in ["ARMOR", "BAG"]): mats = 16
                     elif any(x in key_base for x in ["SHOES", "HEAD"]): mats = 8
                     else: mats = 8
                     
-                    costo_fabricacion = (costo_mat * mats) * (1 - (devolucion / 100))
+                    costo_fabricacion = (precio_refinado * mats) * (1 - (devolucion / 100))
                     profit_craft = (p_bm * 0.92) - costo_fabricacion
                     
-                    if profit_craft > 0:
+                    if profit_craft > 0 and precio_refinado > 0:
                         try:
                             dt = datetime.strptime(e['buy_price_max_date'], '%Y-%m-%dT%H:%M:%S')
                             min_diff = int((ahora - dt).total_seconds() / 60)
                             if min_diff <= 60:
+                                
+                                # --- GENERACIÓN DE LA RECETA DINÁMICA ---
+                                if precio_raw > 0:
+                                    receta_str = f"Paga {mats} {tipo_mat} Refinado ({precio_refinado} c/u). Raw está a {precio_raw} c/u."
+                                else:
+                                    receta_str = f"Compra {mats} {tipo_mat} Refinado (a {precio_refinado} c/u) y craftea."
+
                                 resultados_craft.append({
-                                    "Objeto a Fabricar": nombre,
-                                    "Materiales Necesarios": mats,
-                                    "Receta Costo": int(costo_fabricacion),
+                                    "Objeto a Fabricar": nombre_completo,
+                                    "Receta Acción": receta_str,
+                                    "Costo Total Fabricación": int(costo_fabricacion),
                                     "BM Paga": int(p_bm),
                                     "Profit de Crafteo": int(profit_craft),
                                     "Hace": f"{min_diff}m"
@@ -243,9 +277,9 @@ elif menu == "🔨 Crafting Scanner":
                     df_c = pd.DataFrame(resultados_craft).sort_values(by="Profit de Crafteo", ascending=False)
                     st.dataframe(df_c, use_container_width=True)
                 else:
-                    st.warning("No hay profit al craftear con ese costo de material. ¡Intenta con órdenes de compra para los recursos!")
+                    st.warning("El costo de los materiales supera lo que paga el Black Market. ¡Busca otro Tier!")
             except Exception as e:
-                st.error("Error al conectar con la API.")
+                st.error("Error al conectar con la base de datos del mercado.")
 
 # ==========================================
 # MÓDULO 3: ARBITRAJE DE FRAGMENTOS
