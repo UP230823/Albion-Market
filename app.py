@@ -30,7 +30,7 @@ st.sidebar.image("https://assets.albiononline.com/assets/images/logo.png", width
 st.sidebar.header("🎯 Herramientas")
 menu = st.sidebar.radio("Selecciona un Módulo:", [
     "🏹 Flipper (Mercado)", 
-    "🔨 Crafting Scanner (.0 a .4)", 
+    "🔨 Crafting Scanner Masivo", 
     "✨ Arbitraje Fragmentos"
 ])
 st.sidebar.markdown("---")
@@ -39,16 +39,12 @@ st.sidebar.markdown("---")
 # MÓDULO 1: EL FLIPPER ORIGINAL
 # ==========================================
 if menu == "🏹 Flipper (Mercado)":
-    
     st.title("🏹 Albion Master Hunter (Riesgo Cero)")
-    
     categoria_sel = st.sidebar.selectbox("Seleccionar Árbol/Equipo", list(items_db.CATEGORIAS.keys()))
     tiers_visibles = st.sidebar.multiselect("Tiers:", [4, 5, 6, 7, 8], default=[4, 5, 6, 7, 8])
 
     calidades_sel = st.sidebar.multiselect(
-        "Calidades de Compra Base:",
-        options=[1, 2, 3, 4, 5],
-        default=[1, 2, 3, 4, 5],
+        "Calidades de Compra Base:", options=[1, 2, 3, 4, 5], default=[1, 2, 3, 4, 5],
         format_func=lambda x: {1:"Normal", 2:"Buena", 3:"Notable", 4:"Sobresaliente", 5:"Obra Maestra"}[x]
     )
 
@@ -70,7 +66,6 @@ if menu == "🏹 Flipper (Mercado)":
 
     st.markdown("---")
     col1, col2, col3 = st.columns(3)
-
     with col1: btn_normal = st.button("🚀 BÚSQUEDA NORMAL")
     with col2: btn_masivo_200 = st.button("🔥 MASIVO (> 200k)")
     with col3: btn_masivo_300 = st.button("💎 MASIVO (> 300k)")
@@ -78,7 +73,6 @@ if menu == "🏹 Flipper (Mercado)":
     def procesar_busqueda(ids_api, info_diccionarios, umbral_profit=1000):
         datos = []
         chunk_size = 100 
-        
         with st.spinner(f'Analizando lotes del mercado (0 / {len(ids_api)} items)...'):
             progress_bar = st.progress(0)
             for i in range(0, len(ids_api), chunk_size):
@@ -96,10 +90,7 @@ if menu == "🏹 Flipper (Mercado)":
             item, q, city = e['item_id'], e['quality'], e['city']
             if item not in db: db[item] = {}
             if q not in db[item]: db[item][q] = {}
-            db[item][q][city] = {
-                'venta_min': e['sell_price_min'], 'compra_max': e['buy_price_max'], 
-                'fecha': e['sell_price_min_date'] if city == 'Caerleon' else e['buy_price_max_date']
-            }
+            db[item][q][city] = {'venta_min': e['sell_price_min'], 'compra_max': e['buy_price_max'], 'fecha': e['sell_price_min_date'] if city == 'Caerleon' else e['buy_price_max_date']}
 
         resultados = []
         ahora = datetime.utcnow()
@@ -122,7 +113,6 @@ if menu == "🏹 Flipper (Mercado)":
                         for e in [0, 1, 2, 3]:
                             target_id = base_id if e == 0 else f"{base_id}@{e}"
                             p_venta_final, f_str, q_vendida_como = 0, "", q_compra
-
                             for q_venta in range(1, q_compra + 1):
                                 info_bm = db.get(target_id, {}).get(q_venta, {}).get('Black Market', {})
                                 p_bm = info_bm.get('compra_max', 0)
@@ -130,18 +120,13 @@ if menu == "🏹 Flipper (Mercado)":
                                     p_venta_final, f_str, q_vendida_como = p_bm, info_bm.get('fecha'), q_venta
 
                             if p_venta_final == 0: continue
-
-                            costo_mat = 0
-                            receta_texto = "Directo (Sin encantar)"
+                            costo_mat, receta_texto = 0, "Directo (Sin encantar)"
                             if e == 1: 
-                                costo_mat += (p_r * cant)
-                                receta_texto = f"+ {cant} Runas"
+                                costo_mat += (p_r * cant); receta_texto = f"+ {cant} Runas"
                             elif e == 2: 
-                                costo_mat += (p_r * cant) + (p_s * cant)
-                                receta_texto = f"+ {cant} Runas + {cant} Almas"
+                                costo_mat += (p_r * cant) + (p_s * cant); receta_texto = f"+ {cant} Runas + {cant} Almas"
                             elif e == 3: 
-                                costo_mat += (p_r * cant) + (p_s * cant) + (p_re * cant)
-                                receta_texto = f"+ {cant} Runas + {cant} Almas + {cant} Reliquias"
+                                costo_mat += (p_r * cant) + (p_s * cant) + (p_re * cant); receta_texto = f"+ {cant} Runas + {cant} Almas + {cant} Reliquias"
                             
                             costo_total = p_base_q + costo_mat
                             profit = (p_venta_final * 0.92) - costo_total 
@@ -179,130 +164,168 @@ if menu == "🏹 Flipper (Mercado)":
         ids_api_masivo = [f"T{t}_{key}{e}" for t in tiers_visibles for key in dic_maestro.keys() for e in ["", "@1", "@2", "@3"]]
         procesar_busqueda(ids_api_masivo, dic_maestro, umbral_profit=umbral)
 
+
 # ==========================================
-# MÓDULO 2: CRAFTING SCANNER AVANZADO (.0 a .4)
+# MÓDULO 2: CRAFTING SCANNER MASIVO
 # ==========================================
-elif menu == "🔨 Crafting Scanner (.0 a .4)":
-    st.title("🔨 Crafting Scanner Avanzado")
-    st.write("Calcula si fabricar el objeto desde cero (incluyendo calidades altas como .4) deja ganancia.")
+elif menu == "🔨 Crafting Scanner Masivo":
+    st.title("🏭 Analizador de Cadenas de Producción")
+    st.write("Escanea todo el mercado de un encantamiento específico. Calcula la ruta más barata: comprar refinado vs refinarlo tú mismo.")
     
     col1, col2, col3 = st.columns(3)
-    tier_c = col1.selectbox("Tier Base a fabricar:", [4, 5, 6, 7, 8])
-    encantamiento_c = col2.selectbox("Encantamiento (.X):", [0, 1, 2, 3, 4], format_func=lambda x: f".{x}")
-    categoria_craft = col3.selectbox("Familia de Objetos:", list(items_db.CATEGORIAS.keys()))
+    encantamiento_c = col1.selectbox("Filtro de Encantamiento a Escanear:", [4, 3, 2, 1, 0], format_func=lambda x: f".{x}")
+    dev_craft = col2.slider("% Devolución Crafteo (Caerleon)", 0.0, 50.0, 15.2)
+    dev_refine = col3.slider("% Devolución Refinado (Otras ciudades)", 0.0, 50.0, 36.7) # 36.7 es el estándar con bono
     
-    # Diccionario maestro para llamar a la API correctamente
-    MAT_MAP = {
-        "Madera": {"raw": "WOOD", "ref": "PLANKS"},
-        "Cuero": {"raw": "HIDE", "ref": "LEATHER"},
-        "Tela": {"raw": "FIBER", "ref": "CLOTH"},
-        "Metal": {"raw": "ORE", "ref": "METALBAR"}
-    }
+    st.info("⚠️ Este escaneo es profundo. Analizará miles de precios de materiales y equipo simultáneamente.")
     
-    st.info("💡 Selecciona el material principal de esta familia. El sistema buscará su precio automáticamente en Caerleon.")
-    col4, col5 = st.columns(2)
-    tipo_mat = col4.selectbox("Material Principal Usado:", list(MAT_MAP.keys()))
-    devolucion = col5.slider("% Devolución de Recursos al Craftear", 0.0, 50.0, 15.2)
+    # Diccionarios de reglas de Albion
+    MAT_MAP = {"Madera": {"raw": "WOOD", "ref": "PLANKS"}, "Cuero": {"raw": "HIDE", "ref": "LEATHER"}, "Tela": {"raw": "FIBER", "ref": "CLOTH"}, "Metal": {"raw": "ORE", "ref": "METALBAR"}}
+    RAW_RATIO = {4: 2, 5: 3, 6: 4, 7: 5, 8: 5} # Crudos necesarios por tier
     
-    if st.button("🛠️ Escanear Rentabilidad de Crafteo"):
-        items_info = items_db.CATEGORIAS[categoria_craft]
-        
-        # Generar sufijo para la API (@1, @2, @3, @4)
-        suffix = f"@{encantamiento_c}" if encantamiento_c > 0 else ""
-        
-        ids_items = [f"T{tier_c}_{key}{suffix}" for key in items_info.keys()]
-        id_ref = f"T{tier_c}_{MAT_MAP[tipo_mat]['ref']}{suffix}"
-        id_raw = f"T{tier_c}_{MAT_MAP[tipo_mat]['raw']}{suffix}"
-        
-        with st.spinner(f'Buscando precios de {tipo_mat} y analizando Black Market...'):
-            url_mats = f"https://www.albion-online-data.com/api/v2/stats/prices/{id_ref},{id_raw}?locations=Caerleon"
-            url_items = f"https://www.albion-online-data.com/api/v2/stats/prices/{','.join(ids_items)}?locations=BlackMarket"
-            
-            try:
-                res_mats = requests.get(url_mats, timeout=10).json()
-                res_items = requests.get(url_items, timeout=10).json()
-                
-                # Extraemos el precio del material refinado y crudo
-                precio_refinado = next((e['sell_price_min'] for e in res_mats if e['item_id'] == id_ref and e['sell_price_min'] > 0), 0)
-                precio_raw = next((e['sell_price_min'] for e in res_mats if e['item_id'] == id_raw and e['sell_price_min'] > 0), 0)
-                
-                if precio_refinado == 0:
-                    st.warning(f"Nadie está vendiendo {tipo_mat} refinado T{tier_c}.{encantamiento_c} en Caerleon en este momento.")
-                
-                resultados_craft = []
-                ahora = datetime.utcnow()
-                
-                for e in res_items:
-                    p_bm = e['buy_price_max']
-                    if p_bm == 0: continue
-                    
-                    item_id_puro = e['item_id'].split('@')[0]
-                    key_base = item_id_puro.split('_', 1)[1] if '_' in item_id_puro else item_id_puro
-                    nombre = items_info.get(key_base, item_id_puro)
-                    nombre_completo = f"{nombre} .{encantamiento_c}" if encantamiento_c > 0 else nombre
-                    
-                    # Lógica aproximada de materiales por tipo
-                    if "MAIN" in key_base: mats = 16
-                    elif "2H" in key_base: mats = 24 
-                    elif any(x in key_base for x in ["ARMOR", "BAG"]): mats = 16
-                    elif any(x in key_base for x in ["SHOES", "HEAD"]): mats = 8
-                    else: mats = 8
-                    
-                    costo_fabricacion = (precio_refinado * mats) * (1 - (devolucion / 100))
-                    profit_craft = (p_bm * 0.92) - costo_fabricacion
-                    
-                    if profit_craft > 0 and precio_refinado > 0:
-                        try:
-                            dt = datetime.strptime(e['buy_price_max_date'], '%Y-%m-%dT%H:%M:%S')
-                            min_diff = int((ahora - dt).total_seconds() / 60)
-                            if min_diff <= 60:
-                                
-                                # --- GENERACIÓN DE LA RECETA DINÁMICA ---
-                                if precio_raw > 0:
-                                    receta_str = f"Paga {mats} {tipo_mat} Refinado ({precio_refinado} c/u). Raw está a {precio_raw} c/u."
-                                else:
-                                    receta_str = f"Compra {mats} {tipo_mat} Refinado (a {precio_refinado} c/u) y craftea."
+    # Función para deducir material dominante
+    def get_mat_type(item_str, cat_name):
+        s, c = item_str.upper(), cat_name.upper()
+        if any(x in s for x in ["PLATE", "SWORD", "AXE", "MACE", "HAMMER", "CROSSBOW", "DAGGER"]): return "Metal"
+        if any(x in s for x in ["LEATHER", "BOW", "SPEAR"]): return "Cuero"
+        if any(x in s for x in ["CLOTH", "STAFF", "MAGIC", "BOOK"]): return "Tela"
+        if "BOW" in c or "SPEAR" in c or "NATURE" in c or "STAFF" in c: return "Madera"
+        return "Metal" # Default
 
-                                resultados_craft.append({
-                                    "Objeto a Fabricar": nombre_completo,
-                                    "Receta Acción": receta_str,
-                                    "Costo Total Fabricación": int(costo_fabricacion),
-                                    "BM Paga": int(p_bm),
-                                    "Profit de Crafteo": int(profit_craft),
-                                    "Hace": f"{min_diff}m"
-                                })
-                        except: pass
+    if st.button(f"🔥 INICIAR ESCANEO GLOBAL .{encantamiento_c}"):
+        # 1. Generar todos los IDs de materiales necesarios
+        mats_ids = []
+        suffix = f"@{encantamiento_c}" if encantamiento_c > 0 else ""
+        for t in [4, 5, 6, 7, 8]:
+            base_ref_t = f"T{t-1}" if t > 4 else "T3"
+            for mat in MAT_MAP.values():
+                mats_ids.extend([f"T{t}_{mat['ref']}{suffix}", f"T{t}_{mat['raw']}{suffix}", f"{base_ref_t}_{mat['ref']}"])
+        
+        dic_maestro = {}
+        for cat in items_db.CATEGORIAS.values(): dic_maestro.update(cat)
+        
+        equip_ids = [f"T{t}_{key}{suffix}" for t in [4,5,6,7,8] for key in dic_maestro.keys()]
+        
+        datos_mats = []
+        datos_equip = []
+        
+        with st.spinner("Descargando precios de TODA la cadena de suministros..."):
+            # Fetch mats (chunked)
+            for i in range(0, len(mats_ids), 100):
+                chunk = mats_ids[i:i + 100]
+                try:
+                    res = requests.get(f"https://www.albion-online-data.com/api/v2/stats/prices/{','.join(chunk)}?locations=Caerleon", timeout=10)
+                    if res.status_code == 200: datos_mats.extend(res.json())
+                except: pass
+            
+            # Fetch equipment BM (chunked)
+            bar = st.progress(0)
+            for i in range(0, len(equip_ids), 100):
+                chunk = equip_ids[i:i + 100]
+                try:
+                    res = requests.get(f"https://www.albion-online-data.com/api/v2/stats/prices/{','.join(chunk)}?locations=BlackMarket", timeout=10)
+                    if res.status_code == 200: datos_equip.extend(res.json())
+                except: pass
+                bar.progress(min(1.0, (i + 100) / len(equip_ids)))
+
+        # Convertir precios de mats a diccionario rápido
+        db_mats = {e['item_id']: e['sell_price_min'] for e in datos_mats if e['sell_price_min'] > 0}
+        
+        resultados_craft = []
+        ahora = datetime.utcnow()
+        
+        with st.spinner("Calculando rutas de producción óptimas..."):
+            for e in datos_equip:
+                p_bm = e['buy_price_max']
+                if p_bm == 0: continue
+                
+                # Desglosar ID
+                item_full = e['item_id']
+                parts = item_full.split('_', 1)
+                t_str = parts[0] # Ej: T8
+                tier_num = int(t_str[1])
+                key_base = parts[1].split('@')[0]
+                
+                nombre_es = dic_maestro.get(key_base, key_base)
+                tipo_mat = get_mat_type(key_base, "")
+                
+                # Lógica de cantidad de recursos
+                if "MAIN" in key_base: cant_mats = 16
+                elif "2H" in key_base: cant_mats = 24 
+                elif any(x in key_base for x in ["ARMOR", "BAG"]): cant_mats = 16
+                elif any(x in key_base for x in ["SHOES", "HEAD"]): cant_mats = 8
+                else: cant_mats = 8
+
+                # Identificar IDs de materiales
+                id_ref = f"T{tier_num}_{MAT_MAP[tipo_mat]['ref']}{suffix}"
+                id_raw = f"T{tier_num}_{MAT_MAP[tipo_mat]['raw']}{suffix}"
+                base_ref_t = f"T{tier_num-1}" if tier_num > 4 else "T3"
+                id_base_ref = f"{base_ref_t}_{MAT_MAP[tipo_mat]['ref']}"
+                
+                precio_refinado = db_mats.get(id_ref, float('inf'))
+                precio_raw = db_mats.get(id_raw, float('inf'))
+                precio_base_ref = db_mats.get(id_base_ref, float('inf'))
+                
+                # 1. Ruta Refinado (Comprar hecho)
+                costo_ruta_refinado = (precio_refinado * cant_mats) * (1 - (dev_craft / 100))
+                
+                # 2. Ruta Crudo (Refinarlo tú mismo)
+                costo_refinar_1_ud = (precio_raw * RAW_RATIO[tier_num]) + precio_base_ref
+                costo_refinar_1_ud = costo_refinar_1_ud * (1 - (dev_refine / 100))
+                costo_ruta_raw = (costo_refinar_1_ud * cant_mats) * (1 - (dev_craft / 100))
+                
+                # Decidir la mejor ruta
+                mejor_ruta = "Ninguna"
+                costo_optimo = float('inf')
+                
+                if costo_ruta_refinado < costo_ruta_raw and precio_refinado != float('inf'):
+                    mejor_ruta = f"Comprar {tipo_mat} Refinado ({precio_refinado} c/u)"
+                    costo_optimo = costo_ruta_refinado
+                elif costo_ruta_raw <= costo_ruta_refinado and precio_raw != float('inf') and precio_base_ref != float('inf'):
+                    mejor_ruta = f"Comprar {tipo_mat} Crudo ({precio_raw} c/u) y Refinar"
+                    costo_optimo = costo_ruta_raw
+                
+                if costo_optimo == float('inf'): continue # No hay mats en el mercado
+                
+                profit = (p_bm * 0.92) - costo_optimo
+                
+                # Mostrar solo si deja más de 100k
+                if profit > 100000:
+                    try:
+                        dt = datetime.strptime(e['buy_price_max_date'], '%Y-%m-%dT%H:%M:%S')
+                        min_diff = int((ahora - dt).total_seconds() / 60)
                         
-                if resultados_craft:
-                    df_c = pd.DataFrame(resultados_craft).sort_values(by="Profit de Crafteo", ascending=False)
-                    st.dataframe(df_c, use_container_width=True)
-                else:
-                    st.warning("El costo de los materiales supera lo que paga el Black Market. ¡Busca otro Tier!")
-            except Exception as e:
-                st.error("Error al conectar con la base de datos del mercado.")
+                        # --- FILTRO INTELIGENTE DE TIEMPO ---
+                        # Para .4 damos 7 días de margen (10,080 min). Para el resto, 60 minutos.
+                        limite_tiempo = 10080 if encantamiento_c == 4 else 60 
+                        
+                        if min_diff <= limite_tiempo:
+                            resultados_craft.append({
+                                "Objeto": f"{nombre_es} .{encantamiento_c}",
+                                "Tier": f"T{tier_num}",
+                                "Ruta Óptima": mejor_ruta,
+                                "Profit Crafteo": int(profit),
+                                "ROI %": round((profit / costo_optimo) * 100, 1),
+                                "Costo Final": int(costo_optimo),
+                                "BM Paga": int(p_bm),
+                                "Hace": f"{min_diff}m"
+                            })
+                    except: pass
+        
+        if resultados_craft:
+            df_c = pd.DataFrame(resultados_craft).sort_values(by="Profit Crafteo", ascending=False)
+            st.success(f"¡Se encontraron {len(df_c)} oportunidades masivas de producción!")
+            st.dataframe(df_c, use_container_width=True)
+        else:
+            st.warning("No hay márgenes de crafteo rentables actualmente para ese encantamiento.")
 
 # ==========================================
 # MÓDULO 3: ARBITRAJE DE FRAGMENTOS
 # ==========================================
 elif menu == "✨ Arbitraje Fragmentos":
     st.title("✨ Monitoreo de Artefactos (Caerleon)")
-    st.write("Verifica el costo de Runas, Almas y Reliquias en tiempo real para saber si te conviene transmutar o comprar directo.")
-    
     if m_prices:
         datos_art = []
         for t in [4, 5, 6, 7, 8]:
-            r = m_prices.get(f"T{t}_RUNE", def_p[t][0])
-            s = m_prices.get(f"T{t}_SOUL", def_p[t][1])
-            re = m_prices.get(f"T{t}_RELIC", def_p[t][2])
-            
-            datos_art.append({
-                "Nivel": f"Tier {t}",
-                "Precio 1 Runa": int(r),
-                "Precio 1 Alma": int(s),
-                "Precio 1 Reliquia": int(re),
-            })
-        
+            datos_art.append({"Nivel": f"Tier {t}", "Precio 1 Runa": int(m_prices.get(f"T{t}_RUNE", 0)), "Precio 1 Alma": int(m_prices.get(f"T{t}_SOUL", 0)), "Precio 1 Reliquia": int(m_prices.get(f"T{t}_RELIC", 0))})
         st.dataframe(pd.DataFrame(datos_art), use_container_width=True)
-        st.info("💡 **Tip de Trader:** Si el precio de un Alma está absurdamente más barato que 10 Runas, compra las Almas directo. Si las Runas están regaladas, transmútalas en el Manipulador de Energía.")
-    else:
-        st.error("No se pudieron cargar los precios de los artefactos. ¿Está abierto el Albion Data Client?")
